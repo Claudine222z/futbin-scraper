@@ -72,6 +72,10 @@ class TelegramNotifier:
             logger.error(f"❌ Erro ao enviar mensagem Telegram: {e}")
             return False
     
+    def send_notification(self, message: str) -> bool:
+        """Envia notificação simples"""
+        return self.send_message(message)
+    
     def send_start_notification(self, total_players: int) -> bool:
         """Notifica início do scraping"""
         # Calcular tempo estimado (baseado em 4.5 segundos por jogador)

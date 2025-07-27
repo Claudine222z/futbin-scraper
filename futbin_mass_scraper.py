@@ -1512,9 +1512,123 @@ class FutbinMassScraper:
             logger.info(f"🎯 Meta: TODAS as cartas ({total_estimated:,})")
             logger.info(f"⏱️ Duração: {duration_minutes} minutos")
             
+            # Iniciar monitoramento contínuo
+            logger.info("🔄 INICIANDO MONITORAMENTO CONTÍNUO...")
+            self.run_continuous_monitoring()
+            
         except Exception as e:
             logger.error(f"❌ Erro fatal no scraping: {e}")
             self.telegram.send_error_notification(f"Erro fatal: {e}", "Sistema")
+
+    def run_continuous_monitoring(self, check_interval_hours: int = 6):
+        """Executa monitoramento contínuo para novas cartas"""
+        try:
+            logger.info(f"🔄 INICIANDO MONITORAMENTO CONTÍNUO")
+            logger.info(f"⏰ Verificando a cada {check_interval_hours} horas")
+            
+            self.telegram.send_notification(
+                f"🔄 MONITORAMENTO CONTÍNUO INICIADO\n"
+                f"⏰ Verificando novas cartas a cada {check_interval_hours} horas\n"
+                f"🐌 Modo lento ativado"
+            )
+            
+            while True:
+                try:
+                    logger.info("🔍 Verificando novas cartas...")
+                    
+                    # Contar cartas atuais no banco
+                    current_count = self._count_players_in_db()
+                    logger.info(f"📊 Cartas atuais no banco: {current_count}")
+                    
+                    # Verificar apenas as primeiras páginas (onde novas cartas aparecem)
+                    new_cards_found = 0
+                    
+                    for page in range(1, 11):  # Verifica apenas páginas 1-10
+                        try:
+                            logger.info(f"🔍 Verificando página {page}/10 para novas cartas")
+                            
+                            # Buscar URLs da página
+                            page_urls = self._get_player_urls_from_page(page)
+                            
+                            for url in page_urls:
+                                try:
+                                    # Extrair ID do jogador
+                                    player_id = url.split('/')[-2] if url.endswith('/') else url.split('/')[-1]
+                                    
+                                    # Verificar se é uma carta nova
+                                    if not self.player_exists(player_id):
+                                        logger.info(f"🆕 Nova carta encontrada: {player_id}")
+                                        
+                                        # Scrapar com delay maior (modo lento)
+                                        self._random_delay(10.0, 20.0)  # Delay maior no monitoramento
+                                        
+                                        player = self.scrape_player(url)
+                                        
+                                        if player and self._validate_player_data(player):
+                                            if self.save_to_mysql(player):
+                                                new_cards_found += 1
+                                                logger.info(f"✅ Nova carta salva: {player.nome}")
+                                                
+                                                # Notificar nova carta
+                                                self.telegram.send_notification(
+                                                    f"🆕 NOVA CARTA COLETADA!\n"
+                                                    f"👤 {player.nome}\n"
+                                                    f"⭐ {player.overall} Overall\n"
+                                                    f"📍 {player.posicao} - {player.clube}\n"
+                                                    f"📊 Total no banco: {self._count_players_in_db()}"
+                                                )
+                                            else:
+                                                logger.error(f"❌ Erro ao salvar nova carta: {player.nome}")
+                                        else:
+                                            logger.warning(f"⚠️ Nova carta com dados incompletos: {player_id}")
+                                    
+                                    # Delay entre verificações (modo lento)
+                                    self._random_delay(5.0, 10.0)
+                                    
+                                except Exception as e:
+                                    logger.error(f"❌ Erro ao verificar carta {url}: {e}")
+                                    continue
+                            
+                            # Delay entre páginas (modo lento)
+                            self._random_delay(15.0, 30.0)
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao verificar página {page}: {e}")
+                            continue
+                    
+                    # Relatório do ciclo
+                    if new_cards_found > 0:
+                        logger.info(f"🎉 CICLO COMPLETO: {new_cards_found} novas cartas encontradas!")
+                        self.telegram.send_notification(
+                            f"🎉 CICLO DE VERIFICAÇÃO COMPLETO\n"
+                            f"🆕 {new_cards_found} novas cartas coletadas\n"
+                            f"📊 Total no banco: {self._count_players_in_db()}\n"
+                            f"⏰ Próxima verificação em {check_interval_hours} horas"
+                        )
+                    else:
+                        logger.info("✅ CICLO COMPLETO: Nenhuma nova carta encontrada")
+                        self.telegram.send_notification(
+                            f"✅ CICLO DE VERIFICAÇÃO COMPLETO\n"
+                            f"📊 {self._count_players_in_db()} cartas no banco\n"
+                            f"🆕 Nenhuma nova carta encontrada\n"
+                            f"⏰ Próxima verificação em {check_interval_hours} horas"
+                        )
+                    
+                    # Aguardar próximo ciclo
+                    logger.info(f"😴 Aguardando {check_interval_hours} horas para próxima verificação...")
+                    time.sleep(check_interval_hours * 3600)  # Converter horas para segundos
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro no ciclo de monitoramento: {e}")
+                    self.telegram.send_error_notification(f"Erro no monitoramento: {e}", "Sistema")
+                    time.sleep(3600)  # Aguardar 1 hora antes de tentar novamente
+                    
+        except KeyboardInterrupt:
+            logger.info("🛑 Monitoramento contínuo interrompido pelo usuário")
+            self.telegram.send_notification("🛑 MONITORAMENTO CONTÍNUO INTERROMPIDO")
+        except Exception as e:
+            logger.error(f"❌ Erro fatal no monitoramento: {e}")
+            self.telegram.send_error_notification(f"Erro fatal no monitoramento: {e}", "Sistema")
 
 def main():
     """Função principal"""
