@@ -90,18 +90,20 @@ class TelegramNotifier:
             time_estimate = f"{estimated_minutes}min"
         
         message = f"""
-🚀 <b>SCRAPING COMPLETO INICIADO!</b>
+🚀 <b>FUTBIN SCRAPER INICIADO</b>
 
-📊 <b>Total estimado:</b> {total_players:,} cartas
-🎯 <b>Meta:</b> TODAS as cartas do Futbin
-⏱️ <b>Tempo estimado:</b> ~{time_estimate}
+📊 <b>OBJETIVO:</b> {total_players:,} cartas
+⏱️ <b>DURAÇÃO ESTIMADA:</b> {time_estimate}
+🎯 <b>META:</b> TODAS as cartas do site
 
-📄 <b>Páginas:</b> 786 páginas
-🎯 <b>Seções:</b> 200 cartas por seção
-⏸️ <b>Pausas:</b> 5 minutos entre seções
+📋 <b>CONFIGURAÇÃO:</b>
+• 786 páginas para coletar
+• 200 cartas por seção
+• Pausa de 5 min entre seções
+• 4.5 segundos por carta
 
-🔄 <b>Status:</b> Iniciando coleta completa...
-⚡ <b>Velocidade:</b> ~4.5 segundos por carta
+🔄 <b>STATUS:</b> Iniciando coleta...
+⚡ <b>VELOCIDADE:</b> Rápida (coleta inicial)
 🔧 <b>Qualidade:</b> Correção automática de dados incompletos
 
 📈 <b>Monitoramento:</b> Atualizações a cada 50 cartas
@@ -112,7 +114,7 @@ class TelegramNotifier:
         """Notifica progresso do scraping"""
         if isinstance(total, str) and total == "TODAS":
             # Modo "TODAS as cartas"
-            progress_text = f"{current} jogadores coletados"
+            progress_text = f"{current:,} cartas coletadas"
             time_estimate = "Coletando todas as cartas disponíveis"
         else:
             # Modo normal com meta específica
@@ -120,8 +122,8 @@ class TelegramNotifier:
             remaining = total - current
             progress_text = f"{current:,}/{total:,} ({progress_percent:.1f}%)"
             
-            # Calcular tempo estimado (baseado em 3 segundos por jogador)
-            estimated_seconds = remaining * 3
+            # Calcular tempo estimado (baseado em 4.5 segundos por jogador)
+            estimated_seconds = remaining * 4.5
             estimated_minutes = estimated_seconds // 60
             estimated_hours = estimated_minutes // 60
             
@@ -131,17 +133,17 @@ class TelegramNotifier:
                 time_estimate = f"{estimated_minutes}min"
         
         message = f"""
-📈 <b>PROGRESSO ATUALIZADO</b>
+📊 <b>PROGRESSO ATUAL</b>
 
-🎯 <b>Progresso:</b> {progress_text}
-✅ <b>Sucessos:</b> {success_count:,}
-❌ <b>Erros:</b> {error_count:,}
-⏭️ <b>Pulados:</b> {skipped_count:,}
-⏱️ <b>Tempo restante:</b> ~{time_estimate}
+🎯 <b>COLETADAS:</b> {progress_text}
+✅ <b>SUCESSOS:</b> {success_count:,}
+❌ <b>ERROS:</b> {error_count:,}
+⏭️ <b>PULADAS:</b> {skipped_count:,}
 
-👤 <b>Jogador atual:</b> {current_player}
+⏱️ <b>TEMPO RESTANTE:</b> ~{time_estimate}
+📍 <b>POSIÇÃO:</b> {current_player}
 
-🔄 <b>Status:</b> Coletando dados...
+🔄 <b>STATUS:</b> Coletando ativamente...
         """
         return self.send_message(message)
     
@@ -154,11 +156,11 @@ class TelegramNotifier:
         message = f"""
 ⚠️ <b>ERRO DETECTADO</b>
 
-❌ <b>Erro:</b> {clean_error[:100]}...
+❌ <b>PROBLEMA:</b> {clean_error[:100]}...
 🔗 <b>URL:</b> {clean_url[:50]}...
-⏰ <b>Hora:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⏰ <b>HORA:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
-🔄 <b>Status:</b> Tentando novamente...
+🔄 <b>STATUS:</b> Tentando novamente...
         """
         return self.send_message(message)
     
@@ -168,25 +170,25 @@ class TelegramNotifier:
         success_rate = (total_scraped / total_processed * 100) if total_processed > 0 else 0
         
         message = f"""
-🎉 <b>SCRAPING CONCLUÍDO!</b>
+🎉 <b>COLETA INICIAL CONCLUÍDA!</b>
 
-✅ <b>Jogadores coletados:</b> {total_scraped:,}
-❌ <b>Erros:</b> {total_errors:,}
-⏭️ <b>Pulados (já existiam):</b> {total_skipped:,}
-📊 <b>Taxa de sucesso:</b> {success_rate:.1f}%
+✅ <b>COLETADAS:</b> {total_scraped:,} cartas
+❌ <b>ERROS:</b> {total_errors:,}
+⏭️ <b>PULADAS:</b> {total_skipped:,}
+📊 <b>TAXA DE SUCESSO:</b> {success_rate:.1f}%
 """
         
         if final_count is not None:
-            message += f"🎯 <b>Total no Banco:</b> {final_count}\n"
-            message += f"📋 <b>Meta:</b> TODAS as cartas disponíveis\n"
+            message += f"🎯 <b>TOTAL NO BANCO:</b> {final_count:,}\n"
+            message += f"📋 <b>META:</b> TODAS as cartas do site\n"
         
         message += f"""
-⏱️ <b>Duração:</b> {duration_minutes} minutos
+⏱️ <b>DURAÇÃO:</b> {duration_minutes} minutos
 
-💾 <b>Status:</b> Dados salvos no MySQL
-🎯 <b>Próximo passo:</b> Verificar banco de dados
+💾 <b>STATUS:</b> Dados salvos no MySQL
+🔄 <b>PRÓXIMO:</b> Iniciando monitoramento contínuo
 
-🚀 <b>Scraper finalizado com sucesso!</b>
+🚀 <b>SCRAPER FUNCIONANDO PERFEITAMENTE!</b>
         """
         return self.send_message(message)
     
@@ -195,12 +197,69 @@ class TelegramNotifier:
         message = f"""
 📊 <b>RESUMO DIÁRIO</b>
 
-📅 <b>Data:</b> {datetime.now().strftime('%d/%m/%Y')}
-✅ <b>Jogadores coletados:</b> {stats.get('total_scraped', 0):,}
-❌ <b>Erros:</b> {stats.get('total_errors', 0):,}
-⏱️ <b>Tempo total:</b> {stats.get('duration_minutes', 0)} min
-📈 <b>Taxa de sucesso:</b> {stats.get('success_rate', 0):.1f}%
+📅 <b>DATA:</b> {datetime.now().strftime('%d/%m/%Y')}
+✅ <b>COLETADAS:</b> {stats.get('total_scraped', 0):,} cartas
+❌ <b>ERROS:</b> {stats.get('total_errors', 0):,}
+⏱️ <b>TEMPO TOTAL:</b> {stats.get('duration_minutes', 0)} min
+📈 <b>TAXA DE SUCESSO:</b> {stats.get('success_rate', 0):.1f}%
 
-🎯 <b>Status:</b> Sistema funcionando normalmente
+🎯 <b>STATUS:</b> Sistema funcionando normalmente
         """
+        return self.send_message(message)
+    
+    def send_monitoring_start(self, check_interval_hours: int) -> bool:
+        """Notifica início do monitoramento contínuo"""
+        message = f"""
+🔄 <b>MONITORAMENTO CONTÍNUO INICIADO</b>
+
+⏰ <b>VERIFICAÇÃO:</b> A cada {check_interval_hours} horas
+🐌 <b>VELOCIDADE:</b> Modo lento (seguro)
+📄 <b>PÁGINAS:</b> 1-10 (onde novas cartas aparecem)
+
+🎯 <b>OBJETIVO:</b> Detectar novas cartas automaticamente
+📊 <b>STATUS:</b> Monitorando ativamente...
+
+💡 <b>DICA:</b> O sistema agora opera 24/7!
+        """
+        return self.send_message(message)
+    
+    def send_new_card_found(self, player_name: str, overall: int, position: str, club: str, total_in_db: int) -> bool:
+        """Notifica quando uma nova carta é encontrada"""
+        message = f"""
+🆕 <b>NOVA CARTA DETECTADA!</b>
+
+👤 <b>JOGADOR:</b> {player_name}
+⭐ <b>OVERALL:</b> {overall}
+📍 <b>POSIÇÃO:</b> {position}
+🏟️ <b>CLUBE:</b> {club}
+
+📊 <b>TOTAL NO BANCO:</b> {total_in_db:,} cartas
+
+🎉 <b>STATUS:</b> Carta coletada automaticamente!
+        """
+        return self.send_message(message)
+    
+    def send_monitoring_cycle_complete(self, new_cards_found: int, total_in_db: int, next_check_hours: int) -> bool:
+        """Notifica conclusão de um ciclo de monitoramento"""
+        if new_cards_found > 0:
+            message = f"""
+🎉 <b>CICLO DE VERIFICAÇÃO COMPLETO</b>
+
+🆕 <b>NOVAS CARTAS:</b> {new_cards_found} encontradas
+📊 <b>TOTAL NO BANCO:</b> {total_in_db:,} cartas
+⏰ <b>PRÓXIMA VERIFICAÇÃO:</b> Em {next_check_hours} horas
+
+✅ <b>STATUS:</b> Sistema funcionando perfeitamente!
+            """
+        else:
+            message = f"""
+✅ <b>CICLO DE VERIFICAÇÃO COMPLETO</b>
+
+📊 <b>TOTAL NO BANCO:</b> {total_in_db:,} cartas
+🆕 <b>NOVAS CARTAS:</b> Nenhuma encontrada
+⏰ <b>PRÓXIMA VERIFICAÇÃO:</b> Em {next_check_hours} horas
+
+🔄 <b>STATUS:</b> Monitoramento ativo - aguardando novas cartas
+            """
+        return self.send_message(message)
         return self.send_message(message) 

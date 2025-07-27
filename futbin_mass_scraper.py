@@ -1526,11 +1526,7 @@ class FutbinMassScraper:
             logger.info(f"🔄 INICIANDO MONITORAMENTO CONTÍNUO")
             logger.info(f"⏰ Verificando a cada {check_interval_hours} horas")
             
-            self.telegram.send_notification(
-                f"🔄 MONITORAMENTO CONTÍNUO INICIADO\n"
-                f"⏰ Verificando novas cartas a cada {check_interval_hours} horas\n"
-                f"🐌 Modo lento ativado"
-            )
+            self.telegram.send_monitoring_start(check_interval_hours)
             
             while True:
                 try:
@@ -1570,12 +1566,12 @@ class FutbinMassScraper:
                                                 logger.info(f"✅ Nova carta salva: {player.nome}")
                                                 
                                                 # Notificar nova carta
-                                                self.telegram.send_notification(
-                                                    f"🆕 NOVA CARTA COLETADA!\n"
-                                                    f"👤 {player.nome}\n"
-                                                    f"⭐ {player.overall} Overall\n"
-                                                    f"📍 {player.posicao} - {player.clube}\n"
-                                                    f"📊 Total no banco: {self._count_players_in_db()}"
+                                                self.telegram.send_new_card_found(
+                                                    player.nome, 
+                                                    player.overall, 
+                                                    player.posicao, 
+                                                    player.clube, 
+                                                    self._count_players_in_db()
                                                 )
                                             else:
                                                 logger.error(f"❌ Erro ao salvar nova carta: {player.nome}")
@@ -1599,20 +1595,14 @@ class FutbinMassScraper:
                     # Relatório do ciclo
                     if new_cards_found > 0:
                         logger.info(f"🎉 CICLO COMPLETO: {new_cards_found} novas cartas encontradas!")
-                        self.telegram.send_notification(
-                            f"🎉 CICLO DE VERIFICAÇÃO COMPLETO\n"
-                            f"🆕 {new_cards_found} novas cartas coletadas\n"
-                            f"📊 Total no banco: {self._count_players_in_db()}\n"
-                            f"⏰ Próxima verificação em {check_interval_hours} horas"
-                        )
                     else:
                         logger.info("✅ CICLO COMPLETO: Nenhuma nova carta encontrada")
-                        self.telegram.send_notification(
-                            f"✅ CICLO DE VERIFICAÇÃO COMPLETO\n"
-                            f"📊 {self._count_players_in_db()} cartas no banco\n"
-                            f"🆕 Nenhuma nova carta encontrada\n"
-                            f"⏰ Próxima verificação em {check_interval_hours} horas"
-                        )
+                    
+                    self.telegram.send_monitoring_cycle_complete(
+                        new_cards_found, 
+                        self._count_players_in_db(), 
+                        check_interval_hours
+                    )
                     
                     # Aguardar próximo ciclo
                     logger.info(f"😴 Aguardando {check_interval_hours} horas para próxima verificação...")
