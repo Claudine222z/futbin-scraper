@@ -1,14 +1,53 @@
 #!/usr/bin/env python3
 """
-Futbin Scraper - Aplicação Flask para Render
+Futbin Scraper - Aplicação Flask para Render com Scraper em Background
 """
 
 from flask import Flask, jsonify, request
 import os
+import threading
+import time
 from datetime import datetime
 from futbin_mass_scraper import FutbinMassScraper
 
 app = Flask(__name__)
+
+# Variável global para controlar o scraper
+scraper_instance = None
+scraper_thread = None
+is_running = False
+
+def run_scraper_in_background():
+    """Executa o scraper em background"""
+    global scraper_instance, is_running
+    
+    try:
+        # Token do Telegram das variáveis de ambiente
+        telegram_token = os.getenv('TELEGRAM_BOT_TOKEN', '8450381764:AAHS7rOLqUZjdoMgypzKaots282jf9CQlfw')
+        
+        # Criar scraper
+        scraper_instance = FutbinMassScraper(telegram_token)
+        is_running = True
+        
+        # Executar scraping em massa
+        scraper_instance.run_mass_scraping()
+        
+    except Exception as e:
+        print(f"❌ Erro no scraper em background: {e}")
+        is_running = False
+
+def start_scraper():
+    """Inicia o scraper em uma thread separada"""
+    global scraper_thread, is_running
+    
+    if not is_running:
+        scraper_thread = threading.Thread(target=run_scraper_in_background, daemon=True)
+        scraper_thread.start()
+        print("🚀 Scraper iniciado em background")
+        return True
+    else:
+        print("⚠️ Scraper já está rodando")
+        return False
 
 @app.route('/')
 def home():
@@ -16,10 +55,13 @@ def home():
     return jsonify({
         "message": "🚀 Futbin Scraper API",
         "status": "online",
+        "scraper_status": "running" if is_running else "stopped",
         "endpoints": {
             "/": "Esta página",
-            "/scrape": "POST - Scrapar jogador por URL",
-            "/health": "GET - Status da aplicação"
+            "/start": "POST - Iniciar scraper",
+            "/status": "GET - Status do scraper",
+            "/health": "GET - Status da aplicação",
+            "/ping": "GET - Manter ativo"
         }
     })
 
@@ -29,6 +71,7 @@ def health():
     return jsonify({
         "status": "healthy",
         "service": "futbin-scraper",
+        "scraper_running": is_running,
         "timestamp": datetime.now().isoformat()
     })
 
@@ -37,12 +80,65 @@ def ping():
     """Endpoint para manter o serviço ativo"""
     return jsonify({
         "status": "pong",
+        "scraper_running": is_running,
         "timestamp": datetime.now().isoformat()
     })
 
+@app.route('/start', methods=['POST'])
+def start_scraper_endpoint():
+    """Endpoint para iniciar o scraper"""
+    try:
+        if start_scraper():
+            return jsonify({
+                "message": "🚀 Scraper iniciado com sucesso!",
+                "status": "started",
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "message": "⚠️ Scraper já está rodando",
+                "status": "already_running",
+                "timestamp": datetime.now().isoformat()
+            })
+    except Exception as e:
+        return jsonify({
+            "error": f"Erro ao iniciar scraper: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+@app.route('/status')
+def scraper_status():
+    """Endpoint para verificar status do scraper"""
+    try:
+        if scraper_instance:
+            stats = scraper_instance.stats
+            return jsonify({
+                "scraper_running": is_running,
+                "stats": {
+                    "total_scraped": stats.get('total_scraped', 0),
+                    "success_count": stats.get('success_count', 0),
+                    "error_count": stats.get('error_count', 0),
+                    "skipped_count": stats.get('skipped_count', 0),
+                    "current_player": stats.get('current_player', ''),
+                    "start_time": stats.get('start_time', '').isoformat() if stats.get('start_time') else None
+                },
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "scraper_running": False,
+                "message": "Scraper não iniciado",
+                "timestamp": datetime.now().isoformat()
+            })
+    except Exception as e:
+        return jsonify({
+            "error": f"Erro ao obter status: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
 @app.route('/scrape', methods=['POST'])
 def scrape_player():
-    """Endpoint para scrapar jogador"""
+    """Endpoint para scrapar jogador específico"""
     try:
         data = request.get_json()
         
@@ -56,8 +152,11 @@ def scrape_player():
         
         url = data['url']
         
+        # Criar scraper temporário
+        telegram_token = os.getenv('TELEGRAM_BOT_TOKEN', '8450381764:AAHS7rOLqUZjdoMgypzKaots282jf9CQlfw')
+        scraper = FutbinMassScraper(telegram_token)
+        
         # Scrapar jogador
-        scraper = SimpleFutbinScraper()
         player = scraper.scrape_player(url)
         
         if not player:
@@ -67,69 +166,31 @@ def scrape_player():
             }), 404
         
         # Salvar no banco
-        success = salvar_jogador_completo()
+        success = scraper.save_to_mysql(player)
         
         if not success:
             return jsonify({
                 "error": "Erro ao salvar no banco de dados",
                 "player": {
-                    "name": player.name,
+                    "name": player.nome,
                     "overall": player.overall,
-                    "position": player.position
+                    "position": player.posicao
                 }
             }), 500
         
         return jsonify({
-            "success": True,
-            "message": "Jogador scrapado e salvo com sucesso!",
+            "message": "✅ Jogador scrapado e salvo com sucesso!",
             "player": {
                 "id": player.id,
-                "name": player.name,
+                "name": player.nome,
                 "overall": player.overall,
-                "rating": player.rating,
-                "position": player.position,
-                "nation": player.nation,
-                "league": player.league,
-                "club": player.club,
-                "stats": {
-                    "pace": player.stats.pace,
-                    "shooting": player.stats.shooting,
-                    "passing": player.stats.passing,
-                    "dribbling": player.stats.dribbling,
-                    "defending": player.stats.defending,
-                    "physical": player.stats.physical
-                },
-                "detailed_stats": {
-                    "acceleration": player.detailed_stats.acceleration,
-                    "sprint_speed": player.detailed_stats.sprint_speed,
-                    "finishing": player.detailed_stats.finishing,
-                    "shot_power": player.detailed_stats.shot_power,
-                    "long_shots": player.detailed_stats.long_shots,
-                    "volleys": player.detailed_stats.volleys,
-                    "penalties": player.detailed_stats.penalties,
-                    "vision": player.detailed_stats.vision,
-                    "crossing": player.detailed_stats.crossing,
-                    "free_kick_accuracy": player.detailed_stats.free_kick_accuracy,
-                    "short_passing": player.detailed_stats.short_passing,
-                    "long_passing": player.detailed_stats.long_passing,
-                    "curve": player.detailed_stats.curve,
-                    "agility": player.detailed_stats.agility,
-                    "balance": player.detailed_stats.balance,
-                    "reactions": player.detailed_stats.reactions,
-                    "ball_control": player.detailed_stats.ball_control,
-                    "dribbling": player.detailed_stats.dribbling,
-                    "composure": player.detailed_stats.composure,
-                    "interceptions": player.detailed_stats.interceptions,
-                    "heading_accuracy": player.detailed_stats.heading_accuracy,
-                    "marking": player.detailed_stats.marking,
-                    "standing_tackle": player.detailed_stats.standing_tackle,
-                    "sliding_tackle": player.detailed_stats.sliding_tackle,
-                    "jumping": player.detailed_stats.jumping,
-                    "stamina": player.detailed_stats.stamina,
-                    "strength": player.detailed_stats.strength,
-                    "aggression": player.detailed_stats.aggression
-                }
-            }
+                "position": player.posicao,
+                "nation": player.nacao,
+                "league": player.liga,
+                "club": player.clube,
+                "image_url": player.url_imagem
+            },
+            "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
@@ -137,32 +198,12 @@ def scrape_player():
             "error": f"Erro interno: {str(e)}"
         }), 500
 
-@app.route('/scrape/eusebio', methods=['GET'])
-def scrape_eusebio():
-    """Endpoint para scrapar Eusébio (teste)"""
-    try:
-        # URL do Eusébio
-        url = "https://www.futbin.com/25/player/60820/eusebio-da-silva-ferreira"
-        
-        # Scrapar e salvar
-        success = salvar_jogador_completo()
-        
-        if success:
-            return jsonify({
-                "success": True,
-                "message": "Eusébio scrapado e salvo com sucesso!",
-                "url": url
-            })
-        else:
-            return jsonify({
-                "error": "Erro ao scrapar Eusébio"
-            }), 500
-            
-    except Exception as e:
-        return jsonify({
-            "error": f"Erro interno: {str(e)}"
-        }), 500
-
 if __name__ == '__main__':
+    # Iniciar scraper automaticamente quando a aplicação subir
+    print("🚀 Iniciando Futbin Scraper...")
+    start_scraper()
+    
+    # Iniciar servidor Flask
     port = int(os.environ.get('PORT', 5000))
+    print(f"🌐 Servidor iniciado na porta {port}")
     app.run(host='0.0.0.0', port=port, debug=False) 

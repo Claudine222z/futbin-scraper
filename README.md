@@ -70,7 +70,11 @@ TELEGRAM_CHAT_ID=seu_chat_id_aqui
 python run_scraper.py
 ```
 
-## 🚀 Deploy na Render
+## 🚀 Deploy na Render (Versão Atualizada)
+
+**✅ PROBLEMA RESOLVIDO**: Agora o bot funciona em background! Quando você fechar o navegador, o scraper continuará rodando.
+
+### 📋 Passo a Passo
 
 1. **Fork este repositório**
 2. **Acesse [Render.com](https://render.com)**
@@ -85,8 +89,15 @@ python run_scraper.py
 **Nome**: `futbin-scraper`  
 **Environment**: `Python 3`  
 **Build Command**: `pip install -r requirements.txt`  
-**Start Command**: `python run_scraper.py`  
+**Start Command**: `python app.py` *(ATUALIZADO)*  
 **Plan**: `Free`
+
+### 🔄 Como Funciona Agora
+
+- ✅ **Background**: Scraper roda em thread separada
+- ✅ **Persistência**: Continua rodando mesmo fechando navegador
+- ✅ **API**: Endpoints para monitoramento
+- ✅ **Telegram**: Notificações em tempo real
 
 ### 🔧 Variáveis de Ambiente
 
@@ -100,19 +111,47 @@ MYSQL_PASSWORD=Cms332211
 MYSQL_DATABASE=u559058762_futbin
 ```
 
-### 🔄 Manter Ativo
+### 🌐 Endpoints da API
 
-Para evitar o "sleep" da Render, use um serviço de ping:
+Após o deploy, você pode acessar:
 
-1. **UptimeRobot** (gratuito)
-2. **Configure**: `https://seu-app.onrender.com/ping`
-3. **Frequência**: A cada 10 minutos
+- **`https://seu-app.onrender.com/`** - Página inicial
+- **`https://seu-app.onrender.com/status`** - Status do scraper
+- **`https://seu-app.onrender.com/health`** - Saúde da aplicação
+- **`https://seu-app.onrender.com/ping`** - Manter ativo
+
+### 🛡️ Manter Ativo
+
+Para evitar que o serviço "durma":
+
+1. **UptimeRobot** (Recomendado):
+   - Acesse [UptimeRobot.com](https://uptimerobot.com)
+   - Configure monitor: `https://seu-app.onrender.com/ping`
+   - Verificar a cada 10 minutos
+
+2. **Script Local**:
+   ```bash
+   python keep_alive.py
+   ```
+
+
+
+## ✅ Quando o Bot Está Pronto
+
+O bot está pronto quando:
+
+1. **Deploy concluído** na Render
+2. **Logs mostram**: "🚀 Scraper iniciado em background"
+3. **API responde**: `https://seu-app.onrender.com/status`
+4. **Telegram notifica**: "🚀 SCRAPING INICIADO"
+
+**🎉 Depois disso, você pode fechar o navegador com segurança!**
 
 ## 📱 Configuração Telegram
 
 1. **Crie um bot** via @BotFather
 2. **Obtenha o token**
-3. **Configure no Railway** como variável de ambiente
+3. **Configure na Render** como variável de ambiente
 4. **Receba notificações** em tempo real
 
 ## 📊 Monitoramento
