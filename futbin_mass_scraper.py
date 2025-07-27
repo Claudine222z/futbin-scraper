@@ -1379,6 +1379,8 @@ class FutbinMassScraper:
             self.stats['error_count'] = 0
             self.stats['skipped_count'] = 0
             self.stats['incomplete_count'] = 0
+            self.stats['last_status_time'] = datetime.now()
+            self.stats['last_summary_time'] = datetime.now()
             
             # Lista para cartas com dados incompletos
             incomplete_cards = []
@@ -1456,15 +1458,31 @@ class FutbinMassScraper:
                                 current_section += 1
                                 self._handle_section_completion(current_section, CARDS_PER_SECTION, PAUSE_MINUTES)
                             
-                            # Notificar progresso a cada 50 jogadores
-                            if self.stats['total_scraped'] % 50 == 0:
-                                self.telegram.send_progress_notification(
-                                    self.stats['total_scraped'], total_estimated, 
-                                    self.stats['success_count'], 
-                                    self.stats['error_count'],
-                                    self.stats['skipped_count'],
-                                    f"Página {page}/{TOTAL_PAGES}"
+                            # Verificar se deve enviar notificação de status (a cada 10 minutos)
+                            current_time = datetime.now()
+                            time_since_last_status = (current_time - self.stats['last_status_time']).total_seconds() / 60
+                            
+                            if time_since_last_status >= 10:  # 10 minutos
+                                self.telegram.send_status_notification(
+                                    self.stats['total_scraped'], 
+                                    f"Página {page}/{TOTAL_PAGES}",
+                                    self.stats['success_count'],
+                                    self.stats['error_count']
                                 )
+                                self.stats['last_status_time'] = current_time
+                            
+                            # Verificar se deve enviar resumo (a cada 20 minutos)
+                            time_since_last_summary = (current_time - self.stats['last_summary_time']).total_seconds() / 60
+                            
+                            if time_since_last_summary >= 20:  # 20 minutos
+                                self.telegram.send_summary_notification(
+                                    self.stats['total_scraped'], 
+                                    total_estimated,
+                                    self.stats['success_count'],
+                                    self.stats['error_count'],
+                                    self.stats['skipped_count']
+                                )
+                                self.stats['last_summary_time'] = current_time
                             
                             # Delay entre jogadores
                             self._random_delay(3.0, 6.0)  # Delay maior para evitar bloqueios
@@ -1565,14 +1583,15 @@ class FutbinMassScraper:
                                                 new_cards_found += 1
                                                 logger.info(f"✅ Nova carta salva: {player.nome}")
                                                 
-                                                # Notificar nova carta
-                                                self.telegram.send_new_card_found(
-                                                    player.nome, 
-                                                    player.overall, 
-                                                    player.posicao, 
-                                                    player.clube, 
-                                                    self._count_players_in_db()
-                                                )
+                                                # Notificar nova carta apenas se for importante
+                                                if player.overall >= 90:  # Apenas cartas de 90+ overall
+                                                    self.telegram.send_new_card_found(
+                                                        player.nome, 
+                                                        player.overall, 
+                                                        player.posicao, 
+                                                        player.clube, 
+                                                        self._count_players_in_db()
+                                                    )
                                             else:
                                                 logger.error(f"❌ Erro ao salvar nova carta: {player.nome}")
                                         else:

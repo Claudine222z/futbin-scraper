@@ -262,4 +262,42 @@ class TelegramNotifier:
 🔄 <b>STATUS:</b> Monitoramento ativo - aguardando novas cartas
             """
         return self.send_message(message)
+    
+    def send_status_notification(self, total_scraped: int, current_position: str, success_count: int, error_count: int) -> bool:
+        """Notifica status simples a cada 10 minutos"""
+        message = f"""
+📊 <b>STATUS ATUAL</b>
+
+🎯 <b>COLETADAS:</b> {total_scraped:,} cartas
+📍 <b>POSIÇÃO:</b> {current_position}
+✅ <b>SUCESSOS:</b> {success_count:,}
+❌ <b>ERROS:</b> {error_count:,}
+
+🔄 <b>STATUS:</b> Funcionando normalmente
+        """
+        return self.send_message(message)
+    
+    def send_summary_notification(self, total_scraped: int, total_estimated, success_count: int, error_count: int, skipped_count: int) -> bool:
+        """Notifica resumo detalhado a cada 20 minutos"""
+        # Calcular porcentagem
+        if total_estimated == "TODAS":
+            percentage = "∞"
+            progress_text = f"{total_scraped:,}"
+        else:
+            percentage = int((total_scraped / total_estimated) * 100) if total_estimated > 0 else 0
+            progress_text = f"{total_scraped:,}/{total_estimated:,}"
+        
+        message = f"""
+📈 <b>RESUMO DETALHADO</b>
+
+🎯 <b>PROGRESSO:</b> {progress_text} ({percentage}%)
+✅ <b>SUCESSOS:</b> {success_count:,}
+❌ <b>ERROS:</b> {error_count:,}
+⏭️ <b>PULADAS:</b> {skipped_count:,}
+
+📊 <b>TAXA DE SUCESSO:</b> {(success_count/(success_count+error_count)*100):.1f}%
+
+🔄 <b>STATUS:</b> Sistema funcionando perfeitamente
+        """
+        return self.send_message(message)
         return self.send_message(message) 
