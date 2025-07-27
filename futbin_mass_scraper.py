@@ -1583,15 +1583,14 @@ class FutbinMassScraper:
                                                 new_cards_found += 1
                                                 logger.info(f"✅ Nova carta salva: {player.nome}")
                                                 
-                                                # Notificar nova carta apenas se for importante
-                                                if player.overall >= 90:  # Apenas cartas de 90+ overall
-                                                    self.telegram.send_new_card_found(
-                                                        player.nome, 
-                                                        player.overall, 
-                                                        player.posicao, 
-                                                        player.clube, 
-                                                        self._count_players_in_db()
-                                                    )
+                                                # Notificar nova carta
+                                                self.telegram.send_new_card_found(
+                                                    player.nome, 
+                                                    player.overall, 
+                                                    player.posicao, 
+                                                    player.clube, 
+                                                    self._count_players_in_db()
+                                                )
                                             else:
                                                 logger.error(f"❌ Erro ao salvar nova carta: {player.nome}")
                                         else:
