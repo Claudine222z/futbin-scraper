@@ -5,8 +5,8 @@ Futbin Scraper - Aplicação Flask para Render
 
 from flask import Flask, jsonify, request
 import os
-from scraper_final_simples import salvar_jogador_completo
-from simple_futbin_scraper import SimpleFutbinScraper
+from datetime import datetime
+from futbin_mass_scraper import FutbinMassScraper
 
 app = Flask(__name__)
 
@@ -28,7 +28,16 @@ def health():
     """Verificar status da aplicação"""
     return jsonify({
         "status": "healthy",
-        "service": "futbin-scraper"
+        "service": "futbin-scraper",
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.route('/ping')
+def ping():
+    """Endpoint para manter o serviço ativo"""
+    return jsonify({
+        "status": "pong",
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/scrape', methods=['POST'])

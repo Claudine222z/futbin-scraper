@@ -70,14 +70,43 @@ TELEGRAM_CHAT_ID=seu_chat_id_aqui
 python run_scraper.py
 ```
 
-## 🚀 Deploy no Railway
+## 🚀 Deploy na Render
 
 1. **Fork este repositório**
-2. **Acesse [Railway.app](https://railway.app)**
-3. **Conecte seu GitHub**
-4. **Selecione este repositório**
-5. **Configure as variáveis de ambiente**
-6. **Deploy automático!**
+2. **Acesse [Render.com](https://render.com)**
+3. **Faça login com GitHub**
+4. **Clique em "New +" → "Web Service"**
+5. **Conecte seu repositório**
+6. **Configure as variáveis de ambiente**
+7. **Deploy automático!**
+
+### ⚙️ Configuração na Render
+
+**Nome**: `futbin-scraper`  
+**Environment**: `Python 3`  
+**Build Command**: `pip install -r requirements.txt`  
+**Start Command**: `python run_scraper.py`  
+**Plan**: `Free`
+
+### 🔧 Variáveis de Ambiente
+
+Configure estas variáveis na Render:
+
+```env
+TELEGRAM_BOT_TOKEN=8450381764:AAHS7rOLqUZjdoMgypzKaots282jf9CQlfw
+MYSQL_HOST=srv1577.hstgr.io
+MYSQL_USER=u559058762_claudinez
+MYSQL_PASSWORD=Cms332211
+MYSQL_DATABASE=u559058762_futbin
+```
+
+### 🔄 Manter Ativo
+
+Para evitar o "sleep" da Render, use um serviço de ping:
+
+1. **UptimeRobot** (gratuito)
+2. **Configure**: `https://seu-app.onrender.com/ping`
+3. **Frequência**: A cada 10 minutos
 
 ## 📱 Configuração Telegram
 

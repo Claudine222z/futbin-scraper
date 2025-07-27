@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: futbin-scraper
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_scraper.py
+    plan: free
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8450381764:AAHS7rOLqUZjdoMgypzKaots282jf9CQlfw
+      - key: MYSQL_HOST
+        value: srv1577.hstgr.io
+      - key: MYSQL_USER
+        value: u559058762_claudinez
+      - key: MYSQL_PASSWORD
+        value: Cms332211
+      - key: MYSQL_DATABASE
+        value: u559058762_futbin 
