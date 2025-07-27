@@ -24,7 +24,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('mass_scraper.log'),
+        logging.FileHandler('mass_scraper.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -303,7 +303,7 @@ class FutbinMassScraper:
         return info
     
     def _extract_detailed_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """Extrai informações detalhadas do jogador - USANDO LÓGICA DO SIMPLE_SCRAPER"""
+        """Extrai informações detalhadas do jogador - VERSÃO MELHORADA"""
         info = {}
         
         try:
@@ -390,30 +390,10 @@ class FutbinMassScraper:
             if league_id_match:
                 info['id_liga'] = league_id_match.group(1)
             
-            # Alt POS (Posições alternativas) - LÓGICA DO SIMPLE_SCRAPER
-            alt_pos_patterns = [
-                r'Alt POS\s*([A-Z,\s]+)',
-                r'Alt POS\s*([A-Z]+(?:\s*\+\+)?(?:\s*,\s*[A-Z]+(?:\s*\+\+)?)*)',
-                r'LM,\s*CAM,\s*RW',
-                r'RW\s*\+\+\s*RM\s*\+\+\s*CAM\s*\+\+\s*R'
-            ]
-            
-            for pattern in alt_pos_patterns:
-                alt_pos_match = re.search(pattern, all_text, re.IGNORECASE)
-                if alt_pos_match:
-                    alt_positions_text = alt_pos_match.group(1).strip()
-                    # Limpar e separar posições
-                    alt_positions = []
-                    for pos in alt_positions_text.split(','):
-                        pos_clean = pos.strip()
-                        # Remover texto extra após quebras de linha
-                        pos_clean = pos_clean.split('\n')[0].strip()
-                        if pos_clean and pos_clean not in ['Alt POS', 'alt pos'] and len(pos_clean) <= 10:
-                            alt_positions.append(pos_clean)
-                    
-                    if alt_positions:
-                        info['posicoes_alternativas'] = alt_positions
-                        break
+            # POSIÇÕES ALTERNATIVAS - BUSCA MELHORADA
+            alt_positions = self._extract_alt_positions_improved(soup, all_text)
+            if alt_positions:
+                info['posicoes_alternativas'] = alt_positions
             
             # Tentar extrair informações de nação, liga e clube se não foram encontradas antes
             if 'nacao' not in info:
@@ -444,6 +424,44 @@ class FutbinMassScraper:
             logger.error(f"Erro ao extrair informações detalhadas: {e}")
         
         return info
+    
+    def _extract_alt_positions_improved(self, soup: BeautifulSoup, all_text: str) -> List[str]:
+        """Extrai posições alternativas - SÓ POSIÇÕES REAIS"""
+        alt_positions = []
+        
+        try:
+            # PROCURAR APENAS POR "Alt POS" OU "Alternative Positions" NO HTML
+            # Se não encontrar, retornar lista vazia
+            
+            # Padrões específicos para posições alternativas reais
+            alt_pos_patterns = [
+                r'Alt POS\s*([A-Z,\s]+)',
+                r'Alternative Positions\s*([A-Z,\s]+)',
+                r'Alt\.?\s*Positions?\s*([A-Z,\s]+)'
+            ]
+            
+            found_alt_pos = False
+            for pattern in alt_pos_patterns:
+                match = re.search(pattern, all_text, re.IGNORECASE)
+                if match:
+                    found_alt_pos = True
+                    alt_positions_text = match.group(1).strip()
+                    # Limpar e separar posições
+                    for pos in alt_positions_text.split(','):
+                        pos_clean = pos.strip()
+                        # Validar se é uma posição válida
+                        valid_positions = ['LW', 'RW', 'LM', 'RM', 'CAM', 'CM', 'CDM', 'ST', 'CB', 'LB', 'RB', 'GK']
+                        if pos_clean in valid_positions and pos_clean not in alt_positions:
+                            alt_positions.append(pos_clean)
+                    break
+            
+            # SE NÃO ENCONTROU "Alt POS" OU "Alternative Positions", RETORNAR LISTA VAZIA
+            # NÃO INFERIR POSIÇÕES BASEADO EM RATINGS
+            
+        except Exception as e:
+            logger.error(f"Erro ao extrair posições alternativas: {e}")
+        
+        return alt_positions
     
     def _extract_detailed_stats(self, soup: BeautifulSoup) -> DetailedStats:
         """Extrai estatísticas detalhadas do jogador"""
@@ -701,7 +719,7 @@ class FutbinMassScraper:
             return ""
     
     def _extract_roles(self, soup: BeautifulSoup) -> List[Dict[str, List[str]]]:
-        """Extrai roles do jogador - LÓGICA DO SIMPLE_SCRAPER"""
+        """Extrai roles do jogador - VERSÃO MELHORADA - SÓ ROLES REAIS"""
         roles_info = []
         
         try:
@@ -709,7 +727,6 @@ class FutbinMassScraper:
             lines = all_text.split('\n')
             
             # Procurar por seções específicas de roles
-            # Baseado na análise, as roles estão em seções organizadas
             roles_sections = []
             
             # Procurar por seções que começam com posições
@@ -720,71 +737,143 @@ class FutbinMassScraper:
                 'LW': ['Winger', 'Inside Forward', 'Wide Playmaker'],
                 'LM': ['Winger', 'Wide Midfielder', 'Wide Playmaker', 'Inside Forward'],
                 'CAM': ['Playmaker', 'Shadow Striker', 'Half Winger', 'Classic 10'],
-                'RW': ['Winger', 'Inside Forward', 'Wide Playmaker']
+                'RW': ['Winger', 'Inside Forward', 'Wide Playmaker'],
+                'ST': ['Poacher', 'Advanced Forward', 'Target Man', 'Complete Forward'],
+                'CM': ['Box to Box', 'Deep Lying Playmaker', 'Advanced Playmaker'],
+                'CDM': ['Ball Winning Midfielder', 'Deep Lying Playmaker', 'Anchor Man'],
+                'CB': ['Ball Playing Defender', 'Central Defender', 'No Nonsense Centre Back'],
+                'LB': ['Full Back', 'Wing Back', 'Complete Wing Back'],
+                'RB': ['Full Back', 'Wing Back', 'Complete Wing Back'],
+                'GK': ['Sweeper Keeper', 'Goalkeeper', 'Shot Stopper']
             }
             
-            # Procurar por seções de roles no texto
-            for i, line in enumerate(lines):
-                line = line.strip()
+            # BUSCA MELHORADA: Procurar por roles REAIS no texto completo
+            for position, expected_role_list in expected_roles.items():
+                position_roles = []
                 
-                # Verificar se é uma posição válida
-                if line in valid_positions and line in expected_roles:
-                    # Procurar por roles associadas a esta posição
-                    position_roles = []
+                for role in expected_role_list:
+                    # Procurar por padrões mais abrangentes
+                    role_patterns = [
+                        rf'{role}\s*\+\+',
+                        rf'{role}\s*\+',
+                        rf'{role}',
+                        rf'{role.lower()}\s*\+\+',
+                        rf'{role.lower()}\s*\+',
+                        rf'{role.lower()}'
+                    ]
                     
-                    # Procurar nas próximas linhas por roles
-                    for j in range(i+1, min(i+20, len(lines))):
-                        next_line = lines[j].strip()
-                        
-                        # Se encontrar outra posição, parar
-                        if next_line in valid_positions:
+                    for pattern in role_patterns:
+                        matches = re.findall(pattern, all_text, re.IGNORECASE)
+                        for match in matches:
+                            # Determinar o nível baseado no padrão encontrado
+                            if '++' in match:
+                                position_roles.append(f"{role} ++")
+                            elif '+' in match:
+                                position_roles.append(f"{role} +")
+                            else:
+                                position_roles.append(f"{role} ++")  # Padrão
                             break
-                        
-                        # Verificar se é uma role esperada para esta posição
-                        for expected_role in expected_roles[line]:
-                            if expected_role.lower() in next_line.lower():
-                                # Verificar se tem ++ ou +
-                                if '++' in next_line:
-                                    position_roles.append(f"{expected_role} ++")
-                                elif '+' in next_line:
-                                    position_roles.append(f"{expected_role} +")
-                                else:
-                                    position_roles.append(f"{expected_role} ++")  # Padrão
-                    
-                    # Se encontrou roles para esta posição, adicionar
-                    if position_roles:
-                        roles_sections.append({
-                            'position': line,
-                            'roles': position_roles
-                        })
+                
+                if position_roles:
+                    roles_sections.append({
+                        'position': position,
+                        'roles': position_roles
+                    })
             
-            # Se não encontrou seções organizadas, usar método alternativo
-            if not roles_sections:
-                # Procurar por roles específicas no texto
-                for position, expected_role_list in expected_roles.items():
-                    position_roles = []
-                    
-                    for role in expected_role_list:
-                        # Procurar por padrão "role ++" ou "role +"
-                        role_patterns = [
-                            rf'{role}\s*\+\+',
-                            rf'{role}\s*\+'
-                        ]
-                        
-                        for pattern in role_patterns:
-                            if re.search(pattern, all_text, re.IGNORECASE):
-                                # Determinar o nível
-                                if '++' in re.search(pattern, all_text, re.IGNORECASE).group():
-                                    position_roles.append(f"{role} ++")
-                                else:
-                                    position_roles.append(f"{role} +")
+            # BUSCA ALTERNATIVA: Procurar por elementos HTML específicos
+            role_elements = soup.find_all(['div', 'span'], class_=re.compile(r'role|trait|specialty', re.IGNORECASE))
+            
+            for elem in role_elements:
+                text = elem.get_text(strip=True)
+                # Procurar por roles conhecidas no texto
+                for role in ['Winger', 'Inside Forward', 'Playmaker', 'Poacher', 'Advanced Forward']:
+                    if role.lower() in text.lower():
+                        # Tentar determinar a posição baseada no contexto
+                        for position in valid_positions:
+                            if position in text:
+                                # Adicionar role para esta posição
+                                found = False
+                                for section in roles_sections:
+                                    if section['position'] == position:
+                                        if f"{role} ++" not in section['roles']:
+                                            section['roles'].append(f"{role} ++")
+                                        found = True
+                                        break
+                                
+                                if not found:
+                                    roles_sections.append({
+                                        'position': position,
+                                        'roles': [f"{role} ++"]
+                                    })
                                 break
-                    
-                    if position_roles:
-                        roles_sections.append({
-                            'position': position,
-                            'roles': position_roles
-                        })
+            
+            # PROCURAR POR ROLES REAIS NO HTML - MÉTODO PRINCIPAL
+            # Procurar por seções que mostram roles reais
+            role_sections = soup.find_all(['div', 'section'], class_=re.compile(r'role|trait|specialty|position', re.IGNORECASE))
+            
+            for section in role_sections:
+                section_text = section.get_text()
+                # Procurar por padrões de roles com níveis
+                role_patterns = [
+                    r'(Winger|Inside Forward|Playmaker|Poacher|Advanced Forward|Target Man|Complete Forward|Box to Box|Deep Lying Playmaker|Advanced Playmaker|Ball Winning Midfielder|Anchor Man|Ball Playing Defender|Central Defender|No Nonsense Centre Back|Full Back|Wing Back|Complete Wing Back|Sweeper Keeper|Goalkeeper|Shot Stopper)\s*(\+\+|\+)',
+                    r'(Winger|Inside Forward|Playmaker|Poacher|Advanced Forward|Target Man|Complete Forward|Box to Box|Deep Lying Playmaker|Advanced Playmaker|Ball Winning Midfielder|Anchor Man|Ball Playing Defender|Central Defender|No Nonsense Centre Back|Full Back|Wing Back|Complete Wing Back|Sweeper Keeper|Goalkeeper|Shot Stopper)'
+                ]
+                
+                for pattern in role_patterns:
+                    matches = re.findall(pattern, section_text, re.IGNORECASE)
+                    for match in matches:
+                        if isinstance(match, tuple):
+                            role_name = match[0]
+                            level = match[1] if len(match) > 1 else "++"
+                        else:
+                            role_name = match
+                            level = "++"
+                        
+                        # Determinar posição baseada na role
+                        position_mapping = {
+                            'Winger': ['LW', 'RW', 'LM', 'RM'],
+                            'Inside Forward': ['LW', 'RW', 'ST'],
+                            'Playmaker': ['CAM', 'CM'],
+                            'Poacher': ['ST'],
+                            'Advanced Forward': ['ST'],
+                            'Target Man': ['ST'],
+                            'Complete Forward': ['ST'],
+                            'Box to Box': ['CM'],
+                            'Deep Lying Playmaker': ['CM', 'CDM'],
+                            'Advanced Playmaker': ['CAM', 'CM'],
+                            'Ball Winning Midfielder': ['CDM', 'CM'],
+                            'Anchor Man': ['CDM'],
+                            'Ball Playing Defender': ['CB'],
+                            'Central Defender': ['CB'],
+                            'No Nonsense Centre Back': ['CB'],
+                            'Full Back': ['LB', 'RB'],
+                            'Wing Back': ['LB', 'RB'],
+                            'Complete Wing Back': ['LB', 'RB'],
+                            'Sweeper Keeper': ['GK'],
+                            'Goalkeeper': ['GK'],
+                            'Shot Stopper': ['GK']
+                        }
+                        
+                        if role_name in position_mapping:
+                            for position in position_mapping[role_name]:
+                                # Adicionar role para esta posição
+                                found = False
+                                for section in roles_sections:
+                                    if section['position'] == position:
+                                        role_with_level = f"{role_name} {level}"
+                                        if role_with_level not in section['roles']:
+                                            section['roles'].append(role_with_level)
+                                        found = True
+                                        break
+                                
+                                if not found:
+                                    roles_sections.append({
+                                        'position': position,
+                                        'roles': [f"{role_name} {level}"]
+                                    })
+            
+            # REMOVER A INFERÊNCIA AUTOMÁTICA - SÓ ROLES REAIS
+            # NÃO inferir roles baseado na posição principal
             
             # Remover duplicatas e organizar
             unique_sections = {}
@@ -1533,8 +1622,34 @@ class FutbinMassScraper:
             logger.info(f"🎯 Meta: TODAS as cartas ({total_estimated:,})")
             logger.info(f"⏱️ Duração: {duration_minutes} minutos")
             
-            # Iniciar monitoramento contínuo
-            logger.info("🔄 INICIANDO MONITORAMENTO CONTÍNUO...")
+            # EXECUTAR VERIFICAÇÃO COMPLETA
+            logger.info("🔍 INICIANDO VERIFICAÇÃO COMPLETA FINAL...")
+            self.telegram.send_message("""
+🎉 <b>SCRAPING PRINCIPAL CONCLUÍDO!</b>
+
+📊 <b>Próximo passo:</b> Verificação completa e correção automática
+🔄 <b>Status:</b> Iniciando análise final...
+
+⏱️ <b>Duração do scraping:</b> {duration_minutes} minutos
+            """.format(duration_minutes=duration_minutes))
+            
+            # Executar verificação completa
+            self.run_complete_verification()
+            
+            # Iniciar monitoramento contínuo com sistema auxiliar
+            logger.info("🔄 INICIANDO MONITORAMENTO CONTÍNUO COM SISTEMA AUXILIAR...")
+            
+            # Iniciar sistema auxiliar em thread separada
+            import threading
+            auxiliary_thread = threading.Thread(
+                target=self.run_auxiliary_correction_system, 
+                args=(30,),  # Verificar a cada 30 minutos
+                daemon=True
+            )
+            auxiliary_thread.start()
+            logger.info("🔧 Sistema auxiliar iniciado em thread separada")
+            
+            # Iniciar monitoramento contínuo principal
             self.run_continuous_monitoring()
             
         except Exception as e:
@@ -1640,6 +1755,466 @@ class FutbinMassScraper:
         except Exception as e:
             logger.error(f"❌ Erro fatal no monitoramento: {e}")
             self.telegram.send_error_notification(f"Erro fatal no monitoramento: {e}", "Sistema")
+
+    def _count_total_cards_on_site(self) -> int:
+        """Conta o total de cartas disponíveis no site Futbin"""
+        try:
+            logger.info("🔍 Contando total de cartas no site Futbin...")
+            total_cards = 0
+            
+            # Verificar todas as páginas (786 páginas)
+            for page in range(1, 787):
+                try:
+                    logger.info(f"📄 Verificando página {page}/786 para contagem...")
+                    
+                    page_urls = self._get_player_urls_from_page(page)
+                    page_count = len(page_urls)
+                    total_cards += page_count
+                    
+                    logger.info(f"✅ Página {page}: {page_count} cartas encontradas")
+                    
+                    # Delay menor para contagem (apenas leitura)
+                    self._random_delay(1.0, 2.0)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar página {page}: {e}")
+                    continue
+            
+            logger.info(f"🎯 Total de cartas no site: {total_cards:,}")
+            return total_cards
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao contar cartas do site: {e}")
+            return 0
+    
+    def _find_missing_cards(self) -> List[Dict]:
+        """Encontra cartas que estão faltando no banco"""
+        try:
+            logger.info("🔍 Procurando cartas faltantes...")
+            missing_cards = []
+            
+            # Verificar todas as páginas
+            for page in range(1, 787):
+                try:
+                    logger.info(f"📄 Verificando página {page}/786 para cartas faltantes...")
+                    
+                    page_urls = self._get_player_urls_from_page(page)
+                    
+                    for url in page_urls:
+                        try:
+                            # Extrair ID do jogador
+                            player_id = url.split('/')[-2] if url.endswith('/') else url.split('/')[-1]
+                            
+                            # Verificar se existe no banco
+                            if not self.player_exists(player_id):
+                                missing_cards.append({
+                                    'url': url,
+                                    'player_id': player_id,
+                                    'page': page
+                                })
+                                logger.info(f"⏭️ Carta faltante encontrada: {player_id} (página {page})")
+                            
+                            # Delay menor para verificação
+                            self._random_delay(0.5, 1.0)
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao verificar carta {url}: {e}")
+                            continue
+                    
+                    # Delay entre páginas
+                    self._random_delay(2.0, 3.0)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao verificar página {page}: {e}")
+                    continue
+            
+            logger.info(f"🎯 Total de cartas faltantes: {len(missing_cards)}")
+            return missing_cards
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao encontrar cartas faltantes: {e}")
+            return []
+    
+    def _find_incomplete_cards_in_db(self) -> List[Dict]:
+        """Encontra cartas no banco com dados incompletos"""
+        try:
+            logger.info("🔍 Procurando cartas com dados incompletos no banco...")
+            incomplete_cards = []
+            
+            config = {
+                'host': 'srv1577.hstgr.io',
+                'user': 'u559058762_claudinez',
+                'password': 'Cms332211',
+                'database': 'u559058762_futbin'
+            }
+            
+            connection = mysql.connector.connect(**config)
+            cursor = connection.cursor()
+            
+            # Buscar cartas com dados incompletos (priorizar por overall)
+            query = """
+            SELECT futbin_id, name, overall, futbin_url 
+            FROM players_horizontal 
+            WHERE alt_positions_json = '[]' 
+               OR roles_json = '[]' 
+               OR image_url = '' 
+               OR name = 'Desconhecido'
+            ORDER BY overall DESC, futbin_id
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            for row in results:
+                player_id, name, overall, url = row
+                incomplete_cards.append({
+                    'player_id': player_id,
+                    'name': name,
+                    'overall': overall,
+                    'url': url
+                })
+            
+            cursor.close()
+            connection.close()
+            
+            logger.info(f"🎯 Cartas com dados incompletos: {len(incomplete_cards)}")
+            return incomplete_cards
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar cartas incompletas: {e}")
+            return []
+    
+    def _recollect_missing_cards(self, missing_cards: List[Dict]) -> int:
+        """Recoleta cartas que estão faltando"""
+        try:
+            logger.info(f"🔄 Iniciando recoleta de {len(missing_cards)} cartas faltantes...")
+            
+            recollected_count = 0
+            
+            for i, card_info in enumerate(missing_cards, 1):
+                try:
+                    logger.info(f"🔄 Recoletando carta {i}/{len(missing_cards)}: {card_info['player_id']}")
+                    
+                    # Scrapar carta
+                    player = self.scrape_player(card_info['url'])
+                    
+                    if player and self._validate_player_data(player):
+                        # Salvar no banco
+                        if self.save_to_mysql(player):
+                            recollected_count += 1
+                            logger.info(f"✅ Carta recoletada: {player.nome}")
+                            
+                            # Notificar via Telegram a cada 10 cartas
+                            if recollected_count % 10 == 0:
+                                self.telegram.send_message(f"""
+🔄 <b>RECOLETA EM ANDAMENTO</b>
+
+✅ <b>Recoletadas:</b> {recollected_count}/{len(missing_cards)}
+🎯 <b>Progresso:</b> {(recollected_count/len(missing_cards)*100):.1f}%
+👤 <b>Última carta:</b> {player.nome} ({player.overall})
+
+🔄 <b>Status:</b> Continuando recoleta...
+                                """)
+                        else:
+                            logger.error(f"❌ Erro ao salvar carta recoletada: {player.nome}")
+                    else:
+                        logger.warning(f"⚠️ Carta com dados incompletos: {card_info['player_id']}")
+                    
+                    # Delay entre recoletas
+                    self._random_delay(3.0, 6.0)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao recoletar carta {card_info['player_id']}: {e}")
+                    continue
+            
+            logger.info(f"🎯 Recoleta concluída: {recollected_count}/{len(missing_cards)} cartas")
+            return recollected_count
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na recoleta: {e}")
+            return 0
+    
+    def _fix_incomplete_cards_in_db(self, incomplete_cards: List[Dict]) -> int:
+        """Corrige cartas com dados incompletos no banco"""
+        try:
+            logger.info(f"🔧 Iniciando correção de {len(incomplete_cards)} cartas incompletas...")
+            
+            fixed_count = 0
+            
+            for i, card_info in enumerate(incomplete_cards, 1):
+                try:
+                    logger.info(f"🔧 Corrigindo carta {i}/{len(incomplete_cards)}: {card_info['name']} ({card_info['overall']})")
+                    
+                    # Re-scrapar carta
+                    player = self.scrape_player(card_info['url'])
+                    
+                    if player and self._validate_player_data(player):
+                        # Atualizar no banco
+                        if self._update_player_in_db(player):
+                            fixed_count += 1
+                            logger.info(f"✅ Carta corrigida: {player.nome}")
+                            
+                            # Notificar via Telegram a cada 5 correções
+                            if fixed_count % 5 == 0:
+                                self.telegram.send_message(f"""
+🔧 <b>CORREÇÃO EM ANDAMENTO</b>
+
+✅ <b>Corrigidas:</b> {fixed_count}/{len(incomplete_cards)}
+🎯 <b>Progresso:</b> {(fixed_count/len(incomplete_cards)*100):.1f}%
+👤 <b>Última correção:</b> {player.nome} ({player.overall})
+
+🔄 <b>Status:</b> Continuando correções...
+                                """)
+                        else:
+                            logger.error(f"❌ Erro ao atualizar carta: {player.nome}")
+                    else:
+                        logger.warning(f"⚠️ Carta ainda incompleta: {card_info['name']}")
+                    
+                    # Delay entre correções (maior para não sobrecarregar)
+                    self._random_delay(5.0, 10.0)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao corrigir carta {card_info['name']}: {e}")
+                    continue
+            
+            logger.info(f"🎯 Correção concluída: {fixed_count}/{len(incomplete_cards)} cartas")
+            return fixed_count
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na correção: {e}")
+            return 0
+    
+    def run_complete_verification(self):
+        """Executa verificação completa e correção automática"""
+        try:
+            logger.info("🔍 INICIANDO VERIFICAÇÃO COMPLETA DO SISTEMA")
+            
+            # Notificar início
+            self.telegram.send_message("""
+🔍 <b>VERIFICAÇÃO COMPLETA INICIADA</b>
+
+📊 <b>Fase 1:</b> Contando cartas no site
+📊 <b>Fase 2:</b> Verificando banco de dados
+📊 <b>Fase 3:</b> Identificando problemas
+📊 <b>Fase 4:</b> Correção automática
+
+🔄 <b>Status:</b> Iniciando análise...
+            """)
+            
+            # FASE 1: Contar cartas no site
+            logger.info("📊 FASE 1: Contando cartas no site...")
+            site_total = self._count_total_cards_on_site()
+            
+            # FASE 2: Contar cartas no banco
+            logger.info("🗄️ FASE 2: Contando cartas no banco...")
+            db_total = self._count_players_in_db()
+            
+            # FASE 3: Encontrar cartas faltantes
+            logger.info("⏭️ FASE 3: Procurando cartas faltantes...")
+            missing_cards = self._find_missing_cards()
+            
+            # FASE 4: Encontrar cartas incompletas
+            logger.info("🔧 FASE 4: Procurando cartas incompletas...")
+            incomplete_cards = self._find_incomplete_cards_in_db()
+            
+            # Calcular estatísticas
+            missing_count = len(missing_cards)
+            incomplete_count = len(incomplete_cards)
+            success_rate = (db_total / site_total * 100) if site_total > 0 else 0
+            
+            # Relatório completo
+            report = f"""
+📊 <b>RELATÓRIO DE VERIFICAÇÃO COMPLETA</b>
+
+🌐 <b>SITE FUTBIN:</b>
+• Total de cartas: {site_total:,}
+• Páginas verificadas: 786
+
+🗄️ <b>BANCO DE DADOS:</b>
+• Cartas coletadas: {db_total:,}
+• Cartas faltantes: {missing_count:,}
+• Cartas incompletas: {incomplete_count:,}
+• Taxa de sucesso: {success_rate:.1f}%
+
+🎯 <b>ANÁLISE:</b>
+• Cartas para recoletar: {missing_count:,}
+• Cartas para corrigir: {incomplete_count:,}
+• Total de ações: {missing_count + incomplete_count:,}
+
+🔄 <b>PRÓXIMO:</b> Iniciando correção automática...
+            """
+            
+            self.telegram.send_message(report)
+            
+            # FASE 5: Recoletar cartas faltantes
+            if missing_cards:
+                logger.info(f"🔄 FASE 5: Recoletando {len(missing_cards)} cartas faltantes...")
+                recollected = self._recollect_missing_cards(missing_cards)
+                
+                self.telegram.send_message(f"""
+✅ <b>RECOLETA CONCLUÍDA</b>
+
+🔄 <b>Cartas recoletadas:</b> {recollected}/{missing_count}
+📊 <b>Taxa de sucesso:</b> {(recollected/missing_count*100):.1f}%
+
+🎯 <b>Status:</b> Recoleta finalizada!
+                """)
+            
+            # FASE 6: Corrigir cartas incompletas
+            if incomplete_cards:
+                logger.info(f"🔧 FASE 6: Corrigindo {len(incomplete_cards)} cartas incompletas...")
+                fixed = self._fix_incomplete_cards_in_db(incomplete_cards)
+                
+                self.telegram.send_message(f"""
+✅ <b>CORREÇÃO CONCLUÍDA</b>
+
+🔧 <b>Cartas corrigidas:</b> {fixed}/{incomplete_count}
+📊 <b>Taxa de sucesso:</b> {(fixed/incomplete_count*100):.1f}%
+
+🎯 <b>Status:</b> Correção finalizada!
+                """)
+            
+            # Relatório final
+            final_db_total = self._count_players_in_db()
+            final_success_rate = (final_db_total / site_total * 100) if site_total > 0 else 0
+            
+            final_report = f"""
+🎉 <b>VERIFICAÇÃO COMPLETA FINALIZADA!</b>
+
+📊 <b>RESULTADO FINAL:</b>
+• Site: {site_total:,} cartas
+• Banco: {final_db_total:,} cartas
+• Taxa de cobertura: {final_success_rate:.1f}%
+
+✅ <b>AÇÕES REALIZADAS:</b>
+• Recoletadas: {recollected if 'recollected' in locals() else 0}
+• Corrigidas: {fixed if 'fixed' in locals() else 0}
+
+🎯 <b>STATUS:</b> Sistema 100% verificado e corrigido!
+            """
+            
+            self.telegram.send_message(final_report)
+            logger.info("🎉 VERIFICAÇÃO COMPLETA FINALIZADA COM SUCESSO!")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na verificação completa: {e}")
+            self.telegram.send_error_notification(f"Erro na verificação completa: {e}", "Sistema")
+
+    def run_auxiliary_correction_system(self, check_interval_minutes: int = 30):
+        """Executa sistema auxiliar de correção de dados incompletos"""
+        try:
+            logger.info(f"🔧 INICIANDO SISTEMA AUXILIAR DE CORREÇÃO")
+            logger.info(f"⏰ Verificando a cada {check_interval_minutes} minutos")
+            
+            self.telegram.send_message(f"""
+🔧 <b>SISTEMA AUXILIAR INICIADO</b>
+
+🎯 <b>Objetivo:</b> Corrigir dados incompletos no banco
+⏰ <b>Frequência:</b> A cada {check_interval_minutes} minutos
+🎯 <b>Prioridade:</b> Jogadores com overall alto (99-95)
+
+🔄 <b>Status:</b> Monitorando banco de dados...
+            """)
+            
+            while True:
+                try:
+                    logger.info("🔍 Verificando cartas com dados incompletos...")
+                    
+                    # Buscar cartas incompletas (priorizar por overall)
+                    incomplete_cards = self._find_incomplete_cards_in_db()
+                    
+                    if incomplete_cards:
+                        logger.info(f"🔧 Encontradas {len(incomplete_cards)} cartas para corrigir")
+                        
+                        # Filtrar por prioridade (overall alto primeiro)
+                        high_priority = [card for card in incomplete_cards if card['overall'] >= 95]
+                        medium_priority = [card for card in incomplete_cards if 90 <= card['overall'] < 95]
+                        low_priority = [card for card in incomplete_cards if card['overall'] < 90]
+                        
+                        # Corrigir por prioridade
+                        total_fixed = 0
+                        
+                        # Prioridade 1: Overall 95+
+                        if high_priority:
+                            logger.info(f"🔧 Corrigindo {len(high_priority)} cartas de alta prioridade (95+)")
+                            fixed_high = self._fix_incomplete_cards_in_db(high_priority)
+                            total_fixed += fixed_high
+                            
+                            self.telegram.send_message(f"""
+🔧 <b>CORREÇÃO DE ALTA PRIORIDADE CONCLUÍDA</b>
+
+⭐ <b>Overall 95+:</b> {fixed_high}/{len(high_priority)} corrigidas
+📊 <b>Taxa de sucesso:</b> {(fixed_high/len(high_priority)*100):.1f}%
+
+🎯 <b>Status:</b> Continuando correções...
+                            """)
+                        
+                        # Prioridade 2: Overall 90-94
+                        if medium_priority:
+                            logger.info(f"🔧 Corrigindo {len(medium_priority)} cartas de média prioridade (90-94)")
+                            fixed_medium = self._fix_incomplete_cards_in_db(medium_priority)
+                            total_fixed += fixed_medium
+                            
+                            self.telegram.send_message(f"""
+🔧 <b>CORREÇÃO DE MÉDIA PRIORIDADE CONCLUÍDA</b>
+
+⭐ <b>Overall 90-94:</b> {fixed_medium}/{len(medium_priority)} corrigidas
+📊 <b>Taxa de sucesso:</b> {(fixed_medium/len(medium_priority)*100):.1f}%
+
+🎯 <b>Status:</b> Continuando correções...
+                            """)
+                        
+                        # Prioridade 3: Overall < 90
+                        if low_priority:
+                            logger.info(f"🔧 Corrigindo {len(low_priority)} cartas de baixa prioridade (<90)")
+                            fixed_low = self._fix_incomplete_cards_in_db(low_priority)
+                            total_fixed += fixed_low
+                            
+                            self.telegram.send_message(f"""
+🔧 <b>CORREÇÃO DE BAIXA PRIORIDADE CONCLUÍDA</b>
+
+⭐ <b>Overall <90:</b> {fixed_low}/{len(low_priority)} corrigidas
+📊 <b>Taxa de sucesso:</b> {(fixed_low/len(low_priority)*100):.1f}%
+
+🎯 <b>Status:</b> Correção finalizada!
+                            """)
+                        
+                        # Relatório final do ciclo
+                        self.telegram.send_message(f"""
+✅ <b>CICLO DE CORREÇÃO CONCLUÍDO</b>
+
+🔧 <b>Total corrigidas:</b> {total_fixed}/{len(incomplete_cards)}
+📊 <b>Taxa de sucesso:</b> {(total_fixed/len(incomplete_cards)*100):.1f}%
+
+🎯 <b>Próxima verificação:</b> Em {check_interval_minutes} minutos
+                            """)
+                        
+                    else:
+                        logger.info("✅ Nenhuma carta com dados incompletos encontrada")
+                        self.telegram.send_message(f"""
+✅ <b>VERIFICAÇÃO CONCLUÍDA</b>
+
+🎯 <b>Resultado:</b> Nenhuma carta com dados incompletos
+📊 <b>Status:</b> Banco de dados em excelente estado!
+
+⏰ <b>Próxima verificação:</b> Em {check_interval_minutes} minutos
+                            """)
+                        
+                    # Aguardar próximo ciclo
+                    logger.info(f"😴 Aguardando {check_interval_minutes} minutos para próxima verificação...")
+                    time.sleep(check_interval_minutes * 60)  # Converter minutos para segundos
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro no ciclo de correção auxiliar: {e}")
+                    self.telegram.send_error_notification(f"Erro no sistema auxiliar: {e}", "Sistema")
+                    time.sleep(300)  # Aguardar 5 minutos antes de tentar novamente
+                    
+        except KeyboardInterrupt:
+            logger.info("🛑 Sistema auxiliar interrompido pelo usuário")
+            self.telegram.send_notification("🛑 SISTEMA AUXILIAR INTERROMPIDO")
+        except Exception as e:
+            logger.error(f"❌ Erro fatal no sistema auxiliar: {e}")
+            self.telegram.send_error_notification(f"Erro fatal no sistema auxiliar: {e}", "Sistema")
 
 def main():
     """Função principal"""

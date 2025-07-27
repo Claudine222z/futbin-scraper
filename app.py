@@ -61,7 +61,10 @@ def home():
             "/start": "POST - Iniciar scraper",
             "/status": "GET - Status do scraper",
             "/health": "GET - Status da aplicação",
-            "/ping": "GET - Manter ativo"
+            "/ping": "GET - Manter ativo",
+            "/verify": "POST - Executar verificação completa",
+            "/auxiliary": "POST - Executar sistema auxiliar",
+            "/database-analysis": "GET - Análise do banco de dados"
         }
     })
 
@@ -196,6 +199,108 @@ def scrape_player():
     except Exception as e:
         return jsonify({
             "error": f"Erro interno: {str(e)}"
+        }), 500
+
+@app.route('/verify', methods=['POST'])
+def run_verification():
+    """Endpoint para executar verificação completa"""
+    try:
+        if scraper_instance:
+            # Executar verificação em thread separada
+            import threading
+            verification_thread = threading.Thread(
+                target=scraper_instance.run_complete_verification,
+                daemon=True
+            )
+            verification_thread.start()
+            
+            return jsonify({
+                "message": "🔍 Verificação completa iniciada!",
+                "status": "started",
+                "note": "A verificação está rodando em background. Você receberá notificações via Telegram.",
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "error": "Scraper não está inicializado",
+                "timestamp": datetime.now().isoformat()
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "error": f"Erro ao iniciar verificação: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+@app.route('/auxiliary', methods=['POST'])
+def run_auxiliary_system():
+    """Endpoint para executar sistema auxiliar"""
+    try:
+        if scraper_instance:
+            # Executar sistema auxiliar em thread separada
+            import threading
+            auxiliary_thread = threading.Thread(
+                target=scraper_instance.run_auxiliary_correction_system,
+                args=(30,),  # 30 minutos
+                daemon=True
+            )
+            auxiliary_thread.start()
+            
+            return jsonify({
+                "message": "🔧 Sistema auxiliar iniciado!",
+                "status": "started",
+                "note": "O sistema auxiliar está rodando em background. Verificará dados incompletos a cada 30 minutos.",
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "error": "Scraper não está inicializado",
+                "timestamp": datetime.now().isoformat()
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "error": f"Erro ao iniciar sistema auxiliar: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+@app.route('/database-analysis')
+def database_analysis():
+    """Endpoint para análise do banco de dados"""
+    try:
+        if scraper_instance:
+            # Contar cartas no banco
+            db_total = scraper_instance._count_players_in_db()
+            
+            # Buscar cartas incompletas
+            incomplete_cards = scraper_instance._find_incomplete_cards_in_db()
+            
+            # Análise por prioridade
+            high_priority = [card for card in incomplete_cards if card['overall'] >= 95]
+            medium_priority = [card for card in incomplete_cards if 90 <= card['overall'] < 95]
+            low_priority = [card for card in incomplete_cards if card['overall'] < 90]
+            
+            return jsonify({
+                "database_analysis": {
+                    "total_cards": db_total,
+                    "incomplete_cards": len(incomplete_cards),
+                    "high_priority": len(high_priority),
+                    "medium_priority": len(medium_priority),
+                    "low_priority": len(low_priority),
+                    "completion_rate": ((db_total - len(incomplete_cards)) / db_total * 100) if db_total > 0 else 0
+                },
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "error": "Scraper não está inicializado",
+                "timestamp": datetime.now().isoformat()
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "error": f"Erro na análise do banco: {str(e)}",
+            "timestamp": datetime.now().isoformat()
         }), 500
 
 if __name__ == '__main__':
