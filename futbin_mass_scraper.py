@@ -1188,6 +1188,9 @@ class FutbinMassScraper:
     def _handle_section_completion(self, section_number: int, cards_per_section: int, pause_minutes: int):
         """Gerencia a conclusão de uma seção"""
         try:
+            # Gerar pausa aleatória entre 5-9 minutos
+            random_pause = random.randint(5, 9)
+            
             logger.info(f"🎯 SEÇÃO {section_number} CONCLUÍDA!")
             logger.info(f"✅ {cards_per_section} cartas coletadas nesta seção")
             
@@ -1197,14 +1200,14 @@ class FutbinMassScraper:
 
 ✅ <b>Cartas coletadas:</b> {cards_per_section}
 📊 <b>Total até agora:</b> {self.stats['total_scraped']:,}
-⏸️ <b>Pausa:</b> {pause_minutes} minutos
+⏸️ <b>Pausa:</b> {random_pause} minutos (aleatória)
 
-🔄 <b>Status:</b> Pausando para evitar bloqueios...
+🔄 <b>Status:</b> Pausando para máxima segurança...
             """)
             
             # Pausa entre seções
-            logger.info(f"⏸️ Pausando por {pause_minutes} minutos...")
-            time.sleep(pause_minutes * 60)
+            logger.info(f"⏸️ Pausando por {random_pause} minutos...")
+            time.sleep(random_pause * 60)
             
             logger.info(f"🚀 Retomando coleta - Próxima seção...")
             
@@ -1364,7 +1367,7 @@ class FutbinMassScraper:
             
             # Configurações do sistema
             CARDS_PER_SECTION = 200  # Cartas por seção
-            PAUSE_MINUTES = 5  # Pausa entre seções
+            PAUSE_MINUTES = random.randint(5, 9)  # Pausa aleatória entre 5-9 minutos
             TOTAL_PAGES = 786  # Total de páginas do Futbin
             CARDS_PER_PAGE = 30  # Cartas por página
             
