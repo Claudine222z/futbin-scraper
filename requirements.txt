@@ -4,4 +4,5 @@ mysql-connector-python>=8.0.33
 tenacity>=8.2.0
 lxml>=4.9.0
 Flask>=2.3.0
-python-dotenv>=1.0.0 
+python-dotenv>=1.0.0
+fake-useragent>=1.4.0 
